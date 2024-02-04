@@ -1,20 +1,51 @@
-package neo4jquerybuildergo
+package querybuilder
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 )
 
-type QueryBuilder interface {
-	Build() string
+func (q *Query) Match(nodePattern string) *Query {
+	q.queryParts = append(q.queryParts, &MatchBuilder{nodePattern: fmt.Sprintf("(%s)", nodePattern)})
+	q.lastPart = "MATCH"
+	return q
 }
 
-type Query struct {
-	queryParts []QueryBuilder
+func (q *Query) Where(condition string) *Query {
+	if q.lastPart != "MATCH" && q.lastPart != "WHERE" {
+		panic(errors.New("WHERE must follow MATCH"))
+	}
+	q.queryParts = append(q.queryParts, &WhereBuilder{conditions: []string{condition}})
+	q.lastPart = "WHERE"
+	return q
 }
 
-func NewQuery() *Query {
-	return &Query{queryParts: []QueryBuilder{}}
+func (q *Query) ReturnField(field string) *Query {
+	if q.lastPart != "WHERE" && q.lastPart != "RETURN" {
+		panic(errors.New("RETURN must follow WHERE"))
+	}
+	q.queryParts = append(q.queryParts, &ReturnBuilder{returnFields: []string{field}})
+	q.lastPart = "RETURN"
+	return q
+}
+
+func (q *Query) Skip(skip string) *Query {
+	if q.lastPart != "RETURN" && q.lastPart != "SKIP" {
+		panic(errors.New("SKIP must follow RETURN"))
+	}
+	q.queryParts = append(q.queryParts, &Skip{skip: skip})
+	q.lastPart = "SKIP"
+	return q
+}
+
+func (q *Query) Limit(limit string) *Query {
+	if q.lastPart != "SKIP" && q.lastPart != "LIMIT" {
+		panic(errors.New("LIMIT must follow SKIP"))
+	}
+	q.queryParts = append(q.queryParts, &Limit{limit: limit})
+	q.lastPart = "LIMIT"
+	return q
 }
 
 func (q *Query) BuildQuery() string {
@@ -24,31 +55,6 @@ func (q *Query) BuildQuery() string {
 		sb.WriteString(" ")
 	}
 	return strings.TrimSpace(sb.String())
-}
-
-func (q *Query) MatchNode(nodePattern string) *Query {
-	q.queryParts = append(q.queryParts, &MatchBuilder{nodePattern: nodePattern})
-	return q
-}
-
-func (q *Query) Where(condition string) *Query {
-	q.queryParts = append(q.queryParts, &WhereBuilder{conditions: []string{condition}})
-	return q
-}
-
-func (q *Query) ReturnField(field string) *Query {
-	q.queryParts = append(q.queryParts, &ReturnBuilder{returnFields: []string{field}})
-	return q
-}
-
-func (q *Query) Skip(skip int) *Query {
-	q.queryParts = append(q.queryParts, &Skip{skip: skip})
-	return q
-}
-
-func (q *Query) Limit(limit int) *Query {
-	q.queryParts = append(q.queryParts, &Limit{limit: limit})
-	return q
 }
 
 type MatchBuilder struct {
@@ -82,17 +88,18 @@ func (rb *ReturnBuilder) Build() string {
 }
 
 type Skip struct {
-	skip int
+	skip string
 }
 
 func (sb *Skip) Build() string {
-	return fmt.Sprintf("SKIP %d", sb.skip)
+	return fmt.Sprintf("SKIP %s", sb.skip)
 }
 
 type Limit struct {
-	limit int
+	limit string
 }
 
 func (lb *Limit) Build() string {
-	return fmt.Sprintf("LIMIT %d", lb.limit)
+	return fmt.Sprintf("LIMIT %s", lb.limit)
 }
+
